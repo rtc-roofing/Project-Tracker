@@ -1191,6 +1191,17 @@ function openModal(idx){
       const cb=t.querySelector('input');
       cb.addEventListener('change',()=>{ t.querySelector('.lbl').textContent=cb.checked?'On ledger':'Off ledger'; });
       w.appendChild(el('label',null,esc(f.label))); w.appendChild(t);
+} else if(f.type==='stagecombo'){
+      const lab=el('label',null,esc(f.label));
+      const input=el('select');
+      STAGE_VOCAB.forEach(v=>{
+        const o=el('option'); o.value=v; o.textContent=v||'— No stage —';
+        if(v===(r[f.key]||'')) o.selected=true;
+        input.appendChild(o);
+      });
+      input.dataset.key=f.key;
+      w.appendChild(lab); w.appendChild(input);
+      if(f.hint) w.appendChild(el('div','hint',esc(f.hint)));
     } else {
       const lab=el('label',null,esc(f.label));
       let input;
@@ -1202,11 +1213,6 @@ function openModal(idx){
           const dl2=el('datalist'); dl2.id='dl_'+f.key;
           uniqueVals(f.key).forEach(v=>{ const o=el('option'); o.value=v; dl2.appendChild(o); });
           body.appendChild(dl2); datalists[f.key]=true;
-        }
-        if(f.type==='stagecombo'){
-          const dl2=el('datalist'); dl2.id='dl_stage';
-          STAGE_VOCAB.forEach(v=>{ const o=el('option'); o.value=v; dl2.appendChild(o); });
-          body.appendChild(dl2); datalists.stage=true;
         }
       }
       input.value = r[f.key]||'';
