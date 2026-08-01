@@ -424,6 +424,7 @@ body.admin-mode .admin-only{display:inline-flex!important}
   <button class="tab active" data-view="board">Board</button>
   <button class="tab" data-view="table">Table</button>
   <button class="tab" data-view="summary">Summary</button>
+  <button class="btn sm ghost admin-only" id="btnAddStage" style="margin-left:auto;align-self:center">＋ Add Stage</button>
 </section>
 
 <main>
@@ -611,8 +612,9 @@ const $ = s => document.querySelector(s);
 const el = (tag, cls, html) => { const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; };
 
 let state = { data: [], loaded: false };
+let boardSettings = { stageOrder: [...STAGE_ORDER], customStages: [], marginPct: 30 };
 let auth = null;               /* {user:{id,email}, accessToken, refreshToken, expiresAt, role, admin} */
-let filters = { pm:'', state:'', team:'', sow:'', stage:'', financing:'', ledger:'' };
+let filters = { pm:'', state:'', team:'', sow:'', stage:'', financing:'', ledger:'', completedFrom:'', completedTo:'', valueMin:'', valueMax:'' };
 let sortKey = 'projectNumber', sortDir = 1;
 let editingIdx = -1, editingId = null;
 let drawerIdx = -1;
@@ -741,10 +743,27 @@ async function setUserRole(id, role){
 }
 
 /* ----- data ----- */
+async function loadBoardSettings(){
+  await ensureAuth();
+  const rows=await supa('/rest/v1/board_settings?select=stage_order,custom_stages,margin_pct&id=eq.main',{},{auth:true});
+  if(rows && rows[0]){
+    boardSettings.stageOrder = rows[0].stage_order && rows[0].stage_order.length ? rows[0].stage_order : [...STAGE_ORDER];
+    boardSettings.customStages = rows[0].custom_stages || [];
+    boardSettings.marginPct = rows[0].margin_pct!=null ? rows[0].margin_pct : 30;
+  }
+}
+async function saveBoardSettings(){
+  if(!isAdmin()) throw new Error('Admin only');
+  await ensureAuth();
+  await supa('/rest/v1/board_settings?id=eq.main',{method:'PATCH',body:JSON.stringify({
+    stage_order: boardSettings.stageOrder, custom_stages: boardSettings.customStages, margin_pct: boardSettings.marginPct
+  })});
+}
+
 async function loadJobs(){
   await ensureAuth();
-  const rows=await supa('/rest/v1/jobs?select=id,data,updated_at&order=created_at.asc',{},{auth:true});
-  state.data=rows.map(r=>Object.assign({id:r.id, updatedAt:r.updated_at}, r.data||{}));
+const rows=await supa('/rest/v1/jobs?select=id,data,created_at,updated_at&order=created_at.desc',{},{auth:true});
+  state.data=rows.map(r=>Object.assign({id:r.id, createdAt:r.created_at, updatedAt:r.updated_at}, r.data||{}));
   state.loaded=true;
 }
 async function rawJobIds(){
@@ -754,7 +773,8 @@ async function rawJobIds(){
 async function saveJob(rec){
   if(!isAdmin()) throw new Error('Admin only');
   await ensureAuth();
-  const {id, updatedAt, ...fields}=rec;
+  const {id, updatedAt, createdAt, ...fields}=rec;
+  fields.editedByEmail = auth.user.email;
   if(id){ await supa('/rest/v1/jobs?id=eq.'+id,{method:'PATCH',body:JSON.stringify({data:fields, updated_at:new Date().toISOString()})}); }
   else { await supa('/rest/v1/jobs',{method:'POST',body:JSON.stringify({data:fields})}); }
   await loadJobs();
@@ -869,7 +889,19 @@ function filtered(){
     if(filters.sow    && r.sow !== filters.sow) return false;
     if(filters.financing && r.financing !== filters.financing) return false;
     if(filters.ledger && r.onLedgers !== filters.ledger) return false;
-    if(filters.stage  && deriveStatus(r)!==filters.stage) return false;
+if(filters.stage  && deriveStatus(r)!==filters.stage) return false;
+    if(filters.completedFrom || filters.completedTo){
+      const cd=parseDate(r.completed);
+      if(!cd) return false;
+      if(filters.completedFrom && cd < new Date(filters.completedFrom)) return false;
+      if(filters.completedTo && cd > new Date(filters.completedTo+'T23:59:59')) return false;
+    }
+    if(filters.valueMin || filters.valueMax){
+      const v=primaryTotal(r);
+      if(v==null) return false;
+      if(filters.valueMin && v < parseFloat(filters.valueMin)) return false;
+      if(filters.valueMax && v > parseFloat(filters.valueMax)) return false;
+    }
     if(q){
       const hay=[r.customer,r.projectNumber,r.address,r.state,r.sow,r.shingleColor,r.notes,r.rtcEndNote,r.projectManager]
         .join(' ').toLowerCase();
@@ -892,6 +924,7 @@ function renderKPIs(){
   const pipe=active.reduce((s,r)=>s+(primaryTotal(r)||0),0);
   const totals=rows.map(primaryTotal).filter(v=>v!=null);
   const avg=totals.length?totals.reduce((a,b)=>a+b,0)/totals.length:0;
+const netIncome = pipe * (boardSettings.marginPct/100);
   const kpis=[
     {label:'Active Jobs', num:active.length, sub:rows.length+' total in pipeline', tone:'', ico:'📋'},
     {label:'Scheduled', num:scheduled.length, sub:upcoming.length+' upcoming install', tone:'', ico:'📅'},
@@ -899,6 +932,7 @@ function renderKPIs(){
     {label:'Needs Attention', num:attention.length, sub:'hold · permit · change order', tone:'crit', ico:'⚠️'},
     {label:'Pipeline Value', num:money(pipe), sub:'active jobs (quote/roof cost)', tone:'serious', ico:'💰'},
     {label:'Avg Job Value', num:money(avg), sub:'across '+totals.length+' quoted jobs', tone:'', ico:'📈'},
+    {label:'Est. Net Income', num:money(netIncome), sub:boardSettings.marginPct+'% margin assumption · click to edit', tone:'good', ico:'🧮'},
   ];
   const wrap=$('#kpis'); wrap.innerHTML='';
   kpis.forEach(k=>{
@@ -930,8 +964,26 @@ function renderFilters(){
   const ls=el('select'); ls.dataset.key='ledger';
   [['','All'],['TRUE','On ledger'],['FALSE','Off ledger']].forEach(([v,t])=>{const o=el('option');o.value=v;o.textContent=t;if(v===filters.ledger)o.selected=true;ls.appendChild(o);});
   ls.addEventListener('change',()=>{filters.ledger=ls.value;renderAll();}); ledger.appendChild(ls); wrap.appendChild(ledger);
+ const cf=el('label'); cf.innerHTML='Completed';
+  const cfFrom=el('input'); cfFrom.type='date'; cfFrom.value=filters.completedFrom;
+  cfFrom.style.cssText='border:1px solid var(--border);border-radius:6px;padding:5px 6px;font-size:12px;background:var(--surface-1);color:var(--ink)';
+  cfFrom.addEventListener('change',()=>{filters.completedFrom=cfFrom.value;renderAll();});
+  const cfTo=el('input'); cfTo.type='date'; cfTo.value=filters.completedTo; cfTo.style.cssText=cfFrom.style.cssText;
+  cfTo.addEventListener('change',()=>{filters.completedTo=cfTo.value;renderAll();});
+  cf.appendChild(cfFrom); cf.appendChild(document.createTextNode(' – ')); cf.appendChild(cfTo);
+  wrap.appendChild(cf);
+
+  const vf=el('label'); vf.innerHTML='Value $';
+  const vMin=el('input'); vMin.type='number'; vMin.placeholder='min'; vMin.value=filters.valueMin;
+  vMin.style.cssText='width:70px;border:1px solid var(--border);border-radius:6px;padding:5px 6px;font-size:12px;background:var(--surface-1);color:var(--ink)';
+  vMin.addEventListener('change',()=>{filters.valueMin=vMin.value;renderAll();});
+  const vMax=el('input'); vMax.type='number'; vMax.placeholder='max'; vMax.value=filters.valueMax; vMax.style.cssText=vMin.style.cssText;
+  vMax.addEventListener('change',()=>{filters.valueMax=vMax.value;renderAll();});
+  vf.appendChild(vMin); vf.appendChild(document.createTextNode(' – ')); vf.appendChild(vMax);
+  wrap.appendChild(vf);
+
   const reset=el('button','chip-btn','✕ Clear filters');
-  reset.addEventListener('click',()=>{ filters={pm:'',state:'',team:'',sow:'',stage:'',financing:'',ledger:''}; $('#q').value=''; renderAll(); });
+  reset.addEventListener('click',()=>{ filters={pm:'',state:'',team:'',sow:'',stage:'',financing:'',ledger:'',completedFrom:'',completedTo:'',valueMin:'',valueMax:''}; $('#q').value=''; renderAll(); });
   wrap.appendChild(reset);
   const pill=el('span','count-pill'); pill.textContent=filtered().length+' of '+state.data.length; wrap.appendChild(pill);
 }
@@ -941,7 +993,7 @@ function renderBoard(){
   const rows=filtered();
   const groups={};
   rows.forEach(r=>{ const st=deriveStatus(r); (groups[st]=groups[st]||[]).push(r); });
-  const order=[...STAGE_ORDER,...Object.keys(groups).filter(k=>!STAGE_ORDER.includes(k)).sort()];
+  const order=[...boardSettings.stageOrder,...Object.keys(groups).filter(k=>!boardSettings.stageOrder.includes(k)).sort()];
   const board=$('#board'); board.innerHTML=''; board.className='board';
   if(!state.data.length && state.loaded){
     const empty=el('div','empty-workspace');
@@ -958,16 +1010,51 @@ function renderBoard(){
     const col=el('div','board-col');
     const colr=STAGE_COLOR[st]||{c:'#2a78d6',bg:'rgba(42,120,214,.14)'};
     col.style.setProperty('--sc',colr.c);
-    const h=el('h3',null,`<span class="dot"></span>${esc(st)}<span class="cnt">${groups[st].length}</span>`);
+const h=el('h3',null,`<span class="dot"></span>${esc(st)}<span class="cnt">${groups[st].length}</span>`);
+    if(isAdmin()){
+      const ctrls=el('span'); ctrls.style.cssText='display:inline-flex;gap:2px;margin-left:4px';
+      const mkBtn=(label,title,fn)=>{ const b=el('button',null,label); b.title=title;
+        b.style.cssText='border:0;background:transparent;color:var(--ink-3);cursor:pointer;font-size:11px;padding:0 2px';
+        b.addEventListener('click',(e)=>{ e.stopPropagation(); fn(); }); return b; };
+      const idx0=boardSettings.stageOrder.indexOf(st);
+      if(idx0>0) ctrls.appendChild(mkBtn('◀','Move left',()=>moveStage(st,-1)));
+      if(idx0>=0 && idx0<boardSettings.stageOrder.length-1) ctrls.appendChild(mkBtn('▶','Move right',()=>moveStage(st,1)));
+      if(boardSettings.customStages.includes(st)) ctrls.appendChild(mkBtn('✕','Delete this column',()=>deleteStage(st)));
+      h.appendChild(ctrls);
+    }
     col.appendChild(h);
     const cards=el('div','col-cards');
-    const sorted=groups[st].sort((a,b)=>(parseDate(a.installDate)||0)-(parseDate(b.installDate)||0) || String(a.customer).localeCompare(String(b.customer)));
+    const sorted=groups[st].sort((a,b)=>(new Date(b.createdAt||0))-(new Date(a.createdAt||0)));
     sorted.forEach(r=>{ cards.appendChild(card(r)); });
     col.appendChild(cards);
     board.appendChild(col);
   });
   if(!order.some(st=>groups[st])){ board.innerHTML='<div class="empty-col" style="flex:1">No jobs match the current filters.</div>'; }
   updateBoardFade();
+}
+async function moveStage(st, dir){
+  const arr=boardSettings.stageOrder;
+  const i=arr.indexOf(st); if(i<0) return;
+  const j=i+dir; if(j<0||j>=arr.length) return;
+  [arr[i],arr[j]]=[arr[j],arr[i]];
+  try{ await busy(()=>saveBoardSettings()); renderAll(); }catch(e){ toast('Failed to save order: '+e.message); }
+}
+async function addStage(){
+  if(!isAdmin()) return;
+  const name=prompt('New stage name:'); if(!name || !name.trim()) return;
+  const clean=name.trim();
+  if(boardSettings.stageOrder.includes(clean)) return toast('Stage already exists');
+  boardSettings.stageOrder.push(clean);
+  boardSettings.customStages.push(clean);
+  try{ await busy(()=>saveBoardSettings()); renderAll(); toast('Stage added'); }
+  catch(e){ toast('Failed: '+e.message); }
+}
+async function deleteStage(st){
+  if(!confirm(`Delete the "${st}" column? Jobs in it will move back to auto status once their Stage field is cleared.`)) return;
+  boardSettings.stageOrder=boardSettings.stageOrder.filter(s=>s!==st);
+  boardSettings.customStages=boardSettings.customStages.filter(s=>s!==st);
+  try{ await busy(()=>saveBoardSettings()); renderAll(); toast('Stage removed'); }
+  catch(e){ toast('Failed: '+e.message); }
 }
 function updateBoardFade(){
   const board=$('#board'), wrap=board.parentElement;
@@ -1149,10 +1236,18 @@ function openDrawer(idx){
     else dd.textContent=v;
     dl.appendChild(dt); dl.appendChild(dd);
   };
-  dl.appendChild(el('dt',null,'Status'));
+dl.appendChild(el('dt',null,'Status'));
   const ddSt=el('dd'); ddSt.appendChild(el('span','badge',`<span class="dot"></span>${esc(st)}`));
   ddSt.firstChild.style.color=colr.c; ddSt.firstChild.style.background=colr.bg;
   dl.appendChild(ddSt);
+  if(r.createdAt){
+    dl.appendChild(el('dt',null,'Added'));
+    dl.appendChild(el('dd',null,esc(new Date(r.createdAt).toLocaleString())));
+  }
+  if(r.updatedAt){
+    dl.appendChild(el('dt',null,'Last edited'));
+    dl.appendChild(el('dd',null,`${esc(new Date(r.updatedAt).toLocaleString())}${r.editedByEmail?' by '+esc(r.editedByEmail):''}`));
+  }
   FIELDS.forEach(f=>{ if(f.key!=='stage') add(f.key,f.label); });
   body.appendChild(dl);
   const btnRow=el('div',null);
@@ -1216,7 +1311,7 @@ function openModal(idx){
 } else if(f.type==='stagecombo'){
       const lab=el('label',null,esc(f.label));
       const input=el('select');
-      STAGE_VOCAB.forEach(v=>{
+      [...new Set([...STAGE_VOCAB, ...boardSettings.customStages])].forEach(v=>{
         const o=el('option'); o.value=v; o.textContent=v||'— No stage —';
         if(v===(r[f.key]||'')) o.selected=true;
         input.appendChild(o);
@@ -1339,6 +1434,7 @@ $('#btnImport').addEventListener('click',async ()=>{
   $('#fileInput').click();
 });
 $('#btnNew').addEventListener('click',()=>{ if(!isAdmin()){ toast('Only admins can add jobs'); return; } openModal(-1); });
+   $('#btnAddStage').addEventListener('click', addStage);
 $('#btnReset').addEventListener('click',async ()=>{
   if(!isAdmin()){ toast('Admin only'); return; }
   if(!confirm('Restore the ORIGINAL 151 jobs? Every job you added or changed will be deleted.')) return;
@@ -1453,8 +1549,9 @@ async function restoreSession(){
   setAuthTab('signin');
   if(!IS_CONFIGURED){ $('#setupScreen').classList.add('show'); return; }
   try{
-    await restoreSession();
+await restoreSession();
     if(auth){
+      await loadBoardSettings();
       await loadJobs();
       applyAuthUI(); renderAll();
       if(!auth.admin) toast('Viewing as '+auth.user.email);
