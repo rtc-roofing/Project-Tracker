@@ -1,0 +1,1399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pipeline HQ — Roofing Job Tracker</title>
+<style>
+/* ============================================================
+   Pipeline HQ · design tokens (validated palette, light + dark)
+   ============================================================ */
+:root{
+  --surface-1:#fcfcfb;  --surface-2:#ffffff;  --page:#f9f9f7;
+  --ink:#0b0b0b;  --ink-2:#52514e;  --ink-3:#898781;
+  --line:#e1e0d9;  --border:rgba(11,11,11,.10);
+  --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b;
+  --good-ink:#006300; --warn-ink:#7a5200; --serious-ink:#a8441f; --crit-ink:#b02828;
+  --c1:#2a78d6; --c2:#1baf7a; --c3:#eda100; --c4:#008300;
+  --c5:#4a3aa7; --c6:#e34948; --c7:#e87ba4; --c8:#eb6834;
+  --shadow:0 1px 2px rgba(11,11,11,.05),0 4px 14px rgba(11,11,11,.07);
+  --shadow-lg:0 2px 6px rgba(11,11,11,.08),0 12px 32px rgba(11,11,11,.16);
+  --radius:12px; --radius-sm:8px;
+  --mono:ui-monospace,SFMono-Regular,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --surface-1:#1a1a19; --surface-2:#242422; --page:#0d0d0d;
+    --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --line:#2c2c2a;  --border:rgba(255,255,255,.10);
+    --good-ink:#0ca30c; --warn-ink:#fab219; --serious-ink:#ec835a; --crit-ink:#ff8b8b;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.5);
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:var(--page); color:var(--ink);
+  font-size:14px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:14px;color:var(--ink)}
+a{color:var(--c1)}
+
+/* ---------- top bar ---------- */
+.top{
+  position:sticky;top:0;z-index:40;
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:12px 18px;background:var(--surface-1);border-bottom:1px solid var(--border);
+}
+.brand{display:flex;align-items:center;gap:10px;margin-right:4px}
+.logo{
+  width:38px;height:38px;border-radius:10px;display:grid;place-items:center;font-size:20px;
+  background:linear-gradient(135deg,var(--c1),var(--c5));box-shadow:var(--shadow);
+}
+.brand h1{font-size:16px;margin:0;letter-spacing:-.2px}
+.brand p{font-size:11px;margin:0;color:var(--ink-3);font-weight:500}
+.search{
+  flex:1 1 240px;max-width:460px;display:flex;align-items:center;gap:8px;
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:8px 12px;transition:border-color .15s,box-shadow .15s;
+}
+.search:focus-within{border-color:var(--c1);box-shadow:0 0 0 3px rgba(42,120,214,.16)}
+.search svg{flex:none;opacity:.55}
+.search input{border:0;outline:0;background:transparent;width:100%;font-size:14px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;align-items:center}
+.btn{
+  border:1px solid var(--border);background:var(--surface-2);color:var(--ink);
+  padding:8px 13px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;
+  display:inline-flex;align-items:center;gap:6px;transition:.15s;
+}
+.btn:hover{border-color:var(--ink-3);transform:translateY(-1px)}
+.btn.primary{background:var(--c1);border-color:var(--c1);color:#fff}
+.btn.primary:hover{background:#1f67bd}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--crit-ink)}
+.btn.sm{padding:5px 9px;font-size:12px}
+.btn:disabled{opacity:.55;cursor:default;transform:none}
+
+/* ---------- user chip / role ---------- */
+.user-chip{
+  display:inline-flex;align-items:center;gap:8px;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:999px;padding:5px 12px;
+  font-size:12px;font-weight:600;color:var(--ink-2);max-width:240px;
+}
+.user-chip .em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.role-badge{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 8px;border-radius:999px;flex:none}
+.role-badge.admin{color:var(--good-ink);background:rgba(12,163,12,.12);border:1px solid rgba(12,163,12,.28)}
+.role-badge.viewer{color:var(--ink-2);background:var(--line)}
+
+/* ---------- KPI tiles ---------- */
+.kpis{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:10px;padding:14px 18px 4px;
+}
+.kpi{
+  background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius);
+  padding:13px 14px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+}
+.kpi .ico{font-size:17px;opacity:.85}
+.kpi .num{
+  font-size:26px;font-weight:700;letter-spacing:-.5px;line-height:1.05;margin-top:6px;
+  font-variant-numeric:tabular-nums;
+}
+.kpi .lbl{font-size:11.5px;color:var(--ink-2);font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.kpi .sub{font-size:11px;color:var(--ink-3);margin-top:3px}
+.kpi::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
+  background:var(--tone,var(--c1));
+}
+.kpi.tone-good{--tone:var(--good)} .kpi.tone-warn{--tone:var(--warn)}
+.kpi.tone-serious{--tone:var(--serious)} .kpi.tone-crit{--tone:var(--crit)}
+.kpi .num.crit{color:var(--crit-ink)}
+
+/* ---------- filters ---------- */
+.filters{
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center;
+  padding:10px 18px 6px;
+}
+.filters select{
+  appearance:none;background:var(--surface-1);border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:7px 30px 7px 10px;font-size:12.5px;font-weight:500;
+  color:var(--ink);background-image:linear-gradient(45deg,transparent 50%,var(--ink-3) 50%),linear-gradient(135deg,var(--ink-3) 50%,transparent 50%);
+  background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;background-size:5px 5px;background-repeat:no-repeat;
+}
+.filters label{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-2);font-weight:600}
+.filters label select{font-weight:500}
+.count-pill{
+  font-size:12px;color:var(--ink-2);background:var(--surface-1);
+  border:1px solid var(--border);border-radius:999px;padding:5px 11px;font-weight:600;
+  font-variant-numeric:tabular-nums;
+}
+.chip-btn{
+  border:1px dashed var(--border);background:transparent;color:var(--ink-2);
+  border-radius:999px;padding:6px 11px;font-size:12px;font-weight:600;
+}
+.chip-btn:hover{color:var(--crit-ink);border-color:var(--crit)}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:4px;padding:10px 18px 0;border-bottom:1px solid var(--border)}
+.tab{
+  background:transparent;border:0;border-bottom:2px solid transparent;
+  padding:9px 15px;font-size:13px;font-weight:600;color:var(--ink-2);
+  border-radius:8px 8px 0 0;
+}
+.tab:hover{color:var(--ink)}
+.tab.active{color:var(--c1);border-bottom-color:var(--c1)}
+.tab .n{font-variant-numeric:tabular-nums;opacity:.75;font-size:11.5px;margin-left:4px}
+
+main{padding:14px 18px 60px}
+
+/* ---------- board ---------- */
+.board{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px;align-items:flex-start;overscroll-behavior-x:contain;scrollbar-width:thin}
+.board::-webkit-scrollbar{height:10px}
+.board::-webkit-scrollbar-thumb{background:var(--line);border-radius:999px;border:2px solid var(--surface-1)}
+.board::-webkit-scrollbar-thumb:hover{background:var(--ink-3)}
+.col-cards::-webkit-scrollbar{width:8px}
+.col-cards::-webkit-scrollbar-thumb{background:var(--line);border-radius:999px}
+.board-wrap{position:relative}
+.board-wrap::after{
+  content:"";position:absolute;top:2px;right:2px;bottom:14px;width:26px;pointer-events:none;z-index:3;
+  border-radius:0 12px 12px 0;opacity:0;transition:opacity .2s;
+  background:linear-gradient(90deg,transparent,var(--page));
+}
+.board-wrap:not(.at-end)::after{opacity:.9}
+.board-col{
+  flex:0 0 250px;min-width:250px;background:var(--surface-1);
+  border:1px solid var(--border);border-radius:var(--radius);
+  padding:10px;max-height:calc(100vh - 260px);display:flex;flex-direction:column;overflow:hidden;
+}
+.board-col h3{
+  display:flex;align-items:center;gap:7px;margin:2px 2px 9px;
+  font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-2);
+}
+.board-col h3 .dot{width:9px;height:9px;border-radius:50%;background:var(--sc,var(--c1))}
+.board-col h3 .cnt{font-variant-numeric:tabular-nums;background:var(--line);color:var(--ink-2);
+  border-radius:999px;padding:1px 7px;font-size:10.5px;margin-left:auto}
+.col-cards{overflow-y:auto;display:flex;flex-direction:column;gap:8px;min-height:40px;padding-bottom:2px}
+.card{
+  background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
+  padding:10px 11px;box-shadow:var(--shadow);cursor:pointer;transition:.13s;
+}
+.card:hover{border-color:var(--c1);transform:translateY(-1px);box-shadow:var(--shadow-lg)}
+.card .row1{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.card .proj{font-size:10.5px;color:var(--ink-3);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.3px}
+.card .badge{margin-left:auto}
+.card .cust{font-size:13.5px;font-weight:650;letter-spacing:-.1px}
+.card .meta{font-size:11.5px;color:var(--ink-2);margin-top:2px}
+.card .meta b{font-weight:600}
+.card .foot{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:7px;border-top:1px solid var(--line)}
+.card .date{font-size:10.5px;color:var(--ink-3);font-weight:600}
+.empty-col{color:var(--ink-3);font-size:11.5px;text-align:center;padding:14px 4px;border:1px dashed var(--line);border-radius:8px}
+
+/* ---------- badges & chips ---------- */
+.badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:10.5px;font-weight:700;letter-spacing:.2px;text-transform:uppercase;
+  padding:2.5px 7px;border-radius:999px;white-space:nowrap;
+}
+.badge .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.chip{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:50%;font-size:10.5px;font-weight:700;color:#fff;flex:none;
+}
+
+/* ---------- table ---------- */
+.table-wrap{
+  background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius);
+  overflow:auto;max-height:calc(100vh - 300px);box-shadow:var(--shadow);
+}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+thead th{
+  position:sticky;top:0;z-index:2;background:var(--surface-1);
+  border-bottom:1px solid var(--border);color:var(--ink-2);
+  font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;
+  padding:9px 10px;text-align:left;cursor:pointer;white-space:nowrap;user-select:none;
+}
+thead th:hover{color:var(--ink)}
+thead th.sorted{color:var(--c1)}
+thead th .arr{opacity:.6}
+tbody td{border-bottom:1px solid var(--line);padding:8px 10px;vertical-align:top;font-variant-numeric:tabular-nums}
+tbody tr{cursor:pointer;transition:background .1s}
+tbody tr:hover{background:var(--surface-2)}
+tbody tr.status-off{opacity:.45}
+td.money{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.sort-hint{font-size:11px;color:var(--ink-3);padding:8px 4px 0}
+
+/* ---------- summary ---------- */
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.panel{
+  background:var(--surface-1);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px 16px;box-shadow:var(--shadow);
+}
+.panel h3{font-size:12.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-2);margin:0 0 4px;font-weight:700}
+.panel .sub{font-size:11.5px;color:var(--ink-3);margin:0 0 12px}
+.bars{display:flex;flex-direction:column;gap:9px}
+.bar-row{display:grid;grid-template-columns:132px 1fr 46px;align-items:center;gap:10px}
+.bar-row .lab{font-size:12px;font-weight:600;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{background:var(--line);border-radius:999px;height:12px;overflow:hidden}
+.bar-fill{height:100%;border-radius:999px;min-width:2px;transition:width .5s ease}
+.bar-row .val{font-size:12px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.bar-row .val small{color:var(--ink-3);font-weight:500}
+.list{display:flex;flex-direction:column;gap:6px}
+.list .li{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:5px 8px;border-radius:8px;cursor:pointer}
+.list .li:hover{background:var(--surface-2)}
+.list .li .when{margin-left:auto;font-weight:600;color:var(--ink-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* ---------- drawer ---------- */
+.scrim{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:60;opacity:0;
+  visibility:hidden;pointer-events:none;
+  transition:opacity .2s,visibility .2s;backdrop-filter:blur(1px);
+}
+.scrim.show{opacity:1;visibility:visible;pointer-events:auto}
+.drawer{
+  position:fixed;top:0;right:0;bottom:0;z-index:70;width:min(560px,100%);
+  background:var(--surface-1);border-left:1px solid var(--border);
+  transform:translateX(105%);transition:transform .22s ease;display:flex;flex-direction:column;
+  box-shadow:var(--shadow-lg);
+}
+.drawer.show{transform:none}
+.drawer-head{
+  display:flex;align-items:flex-start;gap:10px;padding:16px 18px;
+  border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface-1);z-index:2;
+}
+.drawer-head h2{margin:0;font-size:17px;letter-spacing:-.3px}
+.drawer-head .sub{font-size:12px;color:var(--ink-3);margin-top:2px}
+.drawer-body{overflow-y:auto;padding:14px 18px 30px}
+.dl{display:grid;grid-template-columns:110px 1fr;gap:10px 14px;font-size:12.5px}
+.dl dt{color:var(--ink-3);font-weight:600;padding-top:1px}
+.dl dd{margin:0;word-break:break-word}
+.dl .blob{padding:9px 11px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;white-space:pre-wrap}
+.dl dd.notes-blob{white-space:pre-wrap}
+.dl dd.money{font-weight:600;font-variant-numeric:tabular-nums}
+.divider{border:0;border-top:1px solid var(--line);margin:16px 0}
+
+/* ---------- modal ---------- */
+.modal-wrap{
+  position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:18px;
+}
+.modal-wrap.show{display:flex}
+.modal{
+  width:min(680px,100%);max-height:92vh;display:flex;flex-direction:column;
+  background:var(--surface-1);border:1px solid var(--border);border-radius:16px;
+  box-shadow:var(--shadow-lg);overflow:hidden;animation:pop .18s ease;
+}
+@keyframes pop{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+.modal-head{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.modal-head h2{margin:0;font-size:16px;letter-spacing:-.2px}
+.modal-head .x{margin-left:auto}
+.modal-body{overflow-y:auto;padding:16px 18px;display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.modal-body .full{grid-column:1/-1}
+.fld{display:flex;flex-direction:column;gap:4px}
+.fld label{font-size:11px;font-weight:700;color:var(--ink-2);text-transform:uppercase;letter-spacing:.4px}
+.fld input,.fld select,.fld textarea{
+  border:1px solid var(--border);background:var(--surface-2);border-radius:8px;
+  padding:8px 10px;outline:0;transition:.15s;width:100%;
+}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--c1);box-shadow:0 0 0 3px rgba(42,120,214,.15)}
+.fld textarea{resize:vertical;min-height:52px;line-height:1.4}
+.fld .hint{font-size:10.5px;color:var(--ink-3)}
+.modal-foot{
+  padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;
+  background:var(--surface-1);
+}
+.modal-foot .spacer{flex:1}
+
+/* toggle */
+.tgl{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none}
+.tgl .track{
+  width:38px;height:22px;border-radius:999px;background:var(--line);position:relative;transition:.18s;flex:none;
+}
+.tgl .track::after{
+  content:"";position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:.18s;
+}
+.tgl input{display:none}
+.tgl input:checked + .track{background:var(--good)}
+.tgl input:checked + .track::after{transform:translateX(16px)}
+.tgl .lbl{font-size:12.5px;font-weight:600}
+.tgl .lbl.on{color:var(--good-ink);font-weight:700}
+
+/* ---------- toast ---------- */
+.toast{
+  position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--ink);color:var(--surface-1);padding:10px 16px;border-radius:10px;
+  font-size:13px;font-weight:600;opacity:0;transition:.25s;z-index:100;box-shadow:var(--shadow-lg);
+  max-width:90vw;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast button{margin-left:10px;border:0;background:var(--surface-1);color:var(--ink);border-radius:6px;padding:4px 10px;font-weight:700;cursor:pointer;font-size:12px}
+
+/* ---------- auth / login screen ---------- */
+#loginScreen,#setupScreen{
+  position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;padding:18px;
+}
+#loginScreen.show,#setupScreen.show{display:flex}
+#loginScreen{background:radial-gradient(1100px 600px at 75% -10%,rgba(42,120,214,.20),transparent),var(--page)}
+#setupScreen{background:var(--page)}
+.login-card{width:min(400px,100%);background:var(--surface-1);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);padding:26px;max-height:94vh;overflow:auto}
+.login-brand{display:flex;align-items:center;gap:11px;margin-bottom:4px}
+.login-brand .logo{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font-size:22px;background:linear-gradient(135deg,var(--c1),var(--c5));box-shadow:var(--shadow)}
+.login-brand h1{margin:0;font-size:18px;letter-spacing:-.3px}
+.login-brand p{margin:0;font-size:12px;color:var(--ink-3)}
+.login-tabs{display:flex;gap:4px;margin:18px 0 16px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:4px}
+.login-tabs button{flex:1;border:0;background:transparent;padding:8px;border-radius:7px;font-weight:600;font-size:13px;color:var(--ink-2);cursor:pointer}
+.login-tabs button.active{background:var(--c1);color:#fff}
+#authGo{width:100%;padding:11px;font-size:14px;margin-top:6px}
+.auth-note{font-size:11.5px;color:var(--ink-3);margin-top:14px;line-height:1.5}
+
+/* password fields (reused by auth + change-password) */
+.pw-field{margin-bottom:12px}
+.pw-field label{font-size:11px;font-weight:700;color:var(--ink-2);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px}
+.pw-field input{width:100%;border:1px solid var(--border);background:var(--surface-2);border-radius:8px;padding:9px 11px;outline:0;font-size:14px}
+.pw-field input:focus{border-color:var(--c1);box-shadow:0 0 0 3px rgba(42,120,214,.15)}
+.pw-err{color:var(--crit-ink);font-size:12px;min-height:16px;margin-top:4px}
+.pw-hint{font-size:11px;color:var(--ink-3);margin-top:4px;line-height:1.45}
+
+/* ---------- setup screen ---------- */
+.setup-card{width:min(640px,100%);background:var(--surface-1);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);padding:28px;max-height:94vh;overflow:auto}
+.setup-card h2{margin:0 0 6px;letter-spacing:-.2px}
+.setup-card .lead{color:var(--ink-2);font-size:13.5px;margin:0 0 18px;line-height:1.5}
+.setup-steps{display:flex;flex-direction:column;gap:16px;margin:0 0 18px}
+.setup-steps .step{display:flex;gap:12px}
+.setup-steps .n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--c1);color:#fff;display:grid;place-items:center;font-size:12.5px;font-weight:700}
+.setup-steps .txt{font-size:13px;line-height:1.55;color:var(--ink-2)}
+.setup-steps .txt b{color:var(--ink)}
+.setup-steps code{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:1px 6px}
+.setup-steps pre{font-family:var(--mono);font-size:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px;overflow:auto;line-height:1.5;margin:8px 0 0}
+
+/* ---------- loading bar ---------- */
+#loadingBar{position:fixed;top:0;left:0;right:0;height:3px;z-index:120;background:var(--c1);transform-origin:0 50%;transform:scaleX(0);opacity:0}
+#loadingBar.on{opacity:1;transform:scaleX(.4);transition:transform .6s ease,opacity .15s}
+#loadingBar.done{transform:scaleX(1);opacity:0;transition:transform .25s,opacity .35s .2s}
+
+/* ---------- admin / view-only ---------- */
+.admin-only{display:none!important}
+body.admin-mode .admin-only{display:inline-flex!important}
+.lock-hint{font-size:12px;color:var(--ink-3);font-style:italic;padding:10px 4px}
+.modal-sm{width:min(380px,100%)}
+.empty-workspace{padding:40px 20px;text-align:center;color:var(--ink-2)}
+.empty-workspace h3{margin:0 0 6px;font-size:16px;color:var(--ink)}
+.empty-workspace p{font-size:13px;margin:0 0 18px;color:var(--ink-3)}
+.seed-btn{display:inline-flex;gap:8px;align-items:center}
+
+/* ---------- responsive ---------- */
+@media (max-width:720px){
+  .modal-body{grid-template-columns:1fr}
+  .bar-row{grid-template-columns:96px 1fr 40px}
+  .kpis{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+<div id="loadingBar"></div>
+
+<header class="top">
+  <div class="brand">
+    <div class="logo">🏠</div>
+    <div><h1>Pipeline HQ</h1><p>Roofing job tracker</p></div>
+  </div>
+  <div class="search">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input id="q" placeholder="Search customer, address, notes…" autocomplete="off">
+  </div>
+  <div class="actions">
+    <span class="user-chip" title="Signed in account">
+      <span class="em" id="userEmail"></span>
+      <span class="role-badge viewer" id="userRole">viewer</span>
+    </span>
+    <button class="btn" id="btnLogout" title="Sign out">Log out</button>
+    <button class="btn primary admin-only" id="btnNew" title="Add a new job">＋ New Job</button>
+    <button class="btn admin-only" id="btnPassword" title="Change your account password">⚙ Password</button>
+    <button class="btn admin-only" id="btnExport" title="Download CSV in your Google Sheet format">⬇ Export CSV</button>
+    <button class="btn admin-only" id="btnImport" title="Load a CSV back in">⬆ Import</button>
+    <button class="btn ghost admin-only" id="btnReset" title="Restore the original data">↺ Reset</button>
+  </div>
+</header>
+
+<section class="kpis" id="kpis"></section>
+<section class="filters" id="filters"></section>
+<section class="tabs">
+  <button class="tab active" data-view="board">Board</button>
+  <button class="tab" data-view="table">Table</button>
+  <button class="tab" data-view="summary">Summary</button>
+</section>
+
+<main>
+  <div class="board-wrap"><div id="board" class="view"></div></div>
+  <div id="table" class="view" style="display:none"></div>
+  <div id="summary" class="view" style="display:none"></div>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-label="Job detail"></aside>
+
+<div class="modal-wrap" id="modalWrap">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="modalTitle">Job</h2>
+      <button class="btn sm ghost x" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot">
+      <button class="btn danger admin-only" id="modalDelete">🗑 Delete</button>
+      <span class="spacer"></span>
+      <button class="btn" id="modalCancel">Cancel</button>
+      <button class="btn primary" id="modalSave">💾 Save Job</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="pwWrap">
+  <div class="modal modal-sm">
+    <div class="modal-head"><h2>⚙ Change password</h2>
+      <button class="btn sm ghost x" id="pwClose">✕</button></div>
+    <div class="modal-body" style="grid-template-columns:1fr">
+      <div class="pw-field"><label>Current password</label><input type="password" id="pwCur" autocomplete="off"></div>
+      <div class="pw-field"><label>New password</label><input type="password" id="pwNew" autocomplete="off"><div class="pw-hint">At least 6 characters</div></div>
+      <div class="pw-field"><label>Confirm new password</label><input type="password" id="pwConfirm" autocomplete="off"></div>
+      <div class="pw-err" id="pwErr"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="spacer"></span>
+      <button class="btn" id="pwCancel">Cancel</button>
+      <button class="btn primary" id="pwSave">Save password</button>
+    </div>
+  </div>
+</div>
+
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-brand"><div class="logo">🏠</div>
+      <div><h1>Pipeline HQ</h1><p>Sign in to view the roofing pipeline</p></div></div>
+    <div class="login-tabs">
+      <button data-tab="signin" class="active">Sign in</button>
+      <button data-tab="signup">Create account</button>
+    </div>
+    <div class="pw-field"><label>Email</label><input type="email" id="authEmail" autocomplete="email" placeholder="you@example.com"></div>
+    <div class="pw-field"><label>Password</label><input type="password" id="authPassword" autocomplete="current-password" placeholder="••••••••"><div class="pw-hint" id="authHint"></div></div>
+    <div class="pw-err" id="authErr"></div>
+    <button class="btn primary" id="authGo">Sign in</button>
+    <div class="auth-note" id="authNote">Only an admin can add, edit or delete jobs. Viewer accounts can view everything.</div>
+  </div>
+</div>
+
+<div id="setupScreen">
+  <div class="setup-card">
+    <h2>🏠 Pipeline HQ · needs its server keys</h2>
+    <p class="lead">This dashboard connects to a Supabase project for real logins and cloud storage. It's not connected yet — here's how to finish the 10-minute setup (full guide in <b>README.md</b>).</p>
+    <div class="setup-steps">
+      <div class="step"><div class="n">1</div><div class="txt"><b>Create a free Supabase project.</b><br>Go to <code>supabase.com</code> → <b>Start your project</b> → pick a region close to you.</div></div>
+      <div class="step"><div class="n">2</div><div class="txt"><b>Run <code>setup.sql</code> once.</b><br>In your project: <b>SQL Editor</b> → paste the whole <code>setup.sql</code> file → <b>Run</b>. This builds the database, logins, and security rules.</div></div>
+      <div class="step"><div class="n">3</div><div class="txt"><b>Create your admin account.</b><br>Open this dashboard, go to <b>Create account</b>, sign up, then in Supabase SQL Editor run the line at the bottom of <code>setup.sql</code> with your email to promote yourself to admin.</div></div>
+      <div class="step"><div class="n">4</div><div class="txt"><b>Paste your keys.</b><br>In Supabase: <b>Project Settings → API</b>. Copy the <b>Project URL</b> and the <b>anon public</b> key, then edit <code>index.html</code> and paste them in the two marked lines at the top of the script.</div></div>
+      <div class="step"><div class="n">5</div><div class="txt"><b>Upload to GitHub.</b><br>Create a repo, push <code>index.html</code>, then <b>Settings → Pages</b> → deploy from the repo. Your dashboard is live.</div></div>
+    </div>
+    <button class="btn primary" id="btnSetupDone">I've configured it — reload</button>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".csv,text/csv" hidden>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* =============================================================
+   1.  SUPABASE — paste your keys here (Project Settings → API)
+   ============================================================= */
+const SUPABASE_URL = 'https://YOURPROJECT.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJ YOUR-ANON-PUBLIC-KEY';
+const IS_CONFIGURED = /^https:\/\/.+\.supabase\.co$/.test(SUPABASE_URL)
+  && SUPABASE_ANON_KEY.startsWith('eyJ') && SUPABASE_ANON_KEY.length > 40;
+
+/* =============================================================
+   Schema — 27 working fields (28-column CSV maps RTC notes twice)
+   ============================================================= */
+const FIELDS = [
+  {key:'onLedgers',              label:'On Ledgers / Media',          type:'toggle'},
+  {key:'projectManager',         label:'Project Manager',            type:'datacombo'},
+  {key:'projectNumber',          label:'Project #',                  type:'text'},
+  {key:'customer',               label:'Customer',                   type:'text'},
+  {key:'note',                   label:'Note',                       type:'text'},
+  {key:'address',                label:'Address',                    type:'text'},
+  {key:'state',                  label:'State',                      type:'datacombo'},
+  {key:'entered',                label:'Entered',                    type:'text', hint:'e.g. 6/17'},
+  {key:'sow',                    label:'SOW (Job Type)',             type:'datacombo'},
+  {key:'roofTeam',               label:'Roof Team',                  type:'datacombo'},
+  {key:'roofQuoteRequested',     label:'Roof Quote requested',       type:'text', hint:'date, e.g. 6/16/26'},
+  {key:'roofQuoteReceived',      label:'Roof Quote Received',        type:'text', hint:'date'},
+  {key:'quoteTotal',             label:'Quote Total',                type:'text', hint:'e.g. $8,625.00'},
+  {key:'subhubAdder',            label:'Subhub adder',               type:'text'},
+  {key:'sq',                     label:'SQ',                         type:'textarea', hint:'squares'},
+  {key:'shingleColor',           label:'Shingle Color',              type:'datacombo'},
+  {key:'financing',              label:'Financing',                  type:'datacombo'},
+  {key:'installRequest',         label:'Install request',            type:'text'},
+  {key:'installDate',            label:'Install Date',               type:'text', hint:'e.g. 6/26'},
+  {key:'completed',              label:'Completed',                  type:'text', hint:'date'},
+  {key:'extraAdders',            label:'Extra Adders',               type:'textarea'},
+  {key:'updatedQuote',           label:'Updated Quote',              type:'text'},
+  {key:'hoCash',                 label:'HO Cash',                    type:'text'},
+  {key:'totalRoofCost',          label:'TOTAL ROOF COST',            type:'text'},
+  {key:'lastUpdate',             label:'Last update',                type:'text', hint:'date'},
+  {key:'notes',                  label:'Notes',                      type:'textarea', full:true},
+  {key:'stage',                  label:'Stage',                      type:'stagecombo'},
+  {key:'rtcEndNote',             label:'RTC end Notes',              type:'textarea', full:true},
+];
+
+/* Export headers — 28 columns, mirrors the original sheet 1:1 */
+const HEADERS = ["On Ledgers/Media","PROJECT MANAGER","Project #","Customer","Note","Address","State","Entered",
+  "SOW (Job Type)","Roof Team","Roof Quote requested","Roof Quote Received","Quote Total","Subhub adder","SQ",
+  "Shingle Color","Financing","Install request","Install Date","Completed","Extra Adders","Updated Quote",
+  "HO Cash","TOTAL ROOF COST","Last update","Notes","Stage","RTC end Notes","RTC end Notes"];
+const HEADER_KEY = {"On Ledgers/Media":"onLedgers","PROJECT MANAGER":"projectManager","Project #":"projectNumber",
+  "Customer":"customer","Note":"note","Address":"address","State":"state","Entered":"entered",
+  "SOW (Job Type)":"sow","Roof Team":"roofTeam","Roof Quote requested":"roofQuoteRequested",
+  "Roof Quote Received":"roofQuoteReceived","Quote Total":"quoteTotal","Subhub adder":"subhubAdder","SQ":"sq",
+  "Shingle Color":"shingleColor","Financing":"financing","Install request":"installRequest",
+  "Install Date":"installDate","Completed":"completed","Extra Adders":"extraAdders","Updated Quote":"updatedQuote",
+  "HO Cash":"hoCash","TOTAL ROOF COST":"totalRoofCost","Last update":"lastUpdate","Notes":"notes",
+  "Stage":"stage","RTC end Notes":"rtcEndNote"};
+
+const STAGE_VOCAB = ['', 'On Going', 'Scheduling', 'Scheduled', 'Assigned to Sub', 'Pending to Assign to Sub',
+  'NRTS', 'On Hold', 'Permitting', 'Change Order', 'Retention', 'Interconnection', 'Completed', 'Cancelled'];
+const STAGE_ALIAS = {
+  'nrts':'NRTS', 'on going':'In Progress', 'in progress':'In Progress',
+  'pending to assign to sub':'Pending to Assign to Sub', 'assigned to sub':'Assigned to Sub',
+  'scheduling':'Scheduling', 'scheduled':'Scheduled', 'install scheduled':'Scheduled',
+  'on hold':'On Hold', 'permitting':'Permitting', 'permit':'Permitting',
+  'change order':'Change Order', 'retention':'Retention', 'cancelled':'Cancelled',
+  'completed':'Completed', 'dq':'Cancelled', 'interconnection':'Permitting',
+  'ic':'Permitting', 'esc install':'Permitting'
+};
+const STAGE_ORDER = ['In Progress','NRTS','Pending to Assign to Sub','Assigned to Sub','Scheduling','Scheduled',
+  'Permitting','Change Order','On Hold','Retention','Completed','Cancelled'];
+const STAGE_COLOR = {
+  'In Progress':            {c:'#2a78d6',  bg:'rgba(42,120,214,.14)'},
+  'NRTS':                   {c:'#898781', bg:'rgba(137,135,129,.16)'},
+  'Pending to Assign to Sub':{c:'#eb6834',bg:'rgba(235,104,52,.15)'},
+  'Assigned to Sub':        {c:'#4a3aa7', bg:'rgba(74,58,167,.14)'},
+  'Scheduling':             {c:'#eda100', bg:'rgba(237,161,0,.16)'},
+  'Scheduled':              {c:'#1baf7a', bg:'rgba(27,175,122,.15)'},
+  'Permitting':             {c:'#ec835a', bg:'rgba(236,131,90,.15)'},
+  'Change Order':           {c:'#fab219', bg:'rgba(250,178,25,.16)'},
+  'On Hold':                {c:'#d03b3b', bg:'rgba(208,59,59,.13)'},
+  'Retention':              {c:'#e87ba4', bg:'rgba(232,123,164,.14)'},
+  'Completed':              {c:'#0ca30c', bg:'rgba(12,163,12,.14)'},
+  'Cancelled':              {c:'#6b6a66', bg:'rgba(107,106,102,.14)'}
+};
+const PM_COLORS = ['#2a78d6','#1baf7a','#eda100','#008300','#4a3aa7','#e34948','#e87ba4','#eb6834'];
+
+/* =============================================================
+   Seed data (original 151 jobs — used for "load originals")
+   ============================================================= */
+const SEED = __SEED_DATA__;
+
+const $ = s => document.querySelector(s);
+const el = (tag, cls, html) => { const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; };
+
+let state = { data: [], loaded: false };
+let auth = null;               /* {user:{id,email}, accessToken, refreshToken, expiresAt, role, admin} */
+let filters = { pm:'', state:'', team:'', sow:'', stage:'', financing:'', ledger:'' };
+let sortKey = 'projectNumber', sortDir = 1;
+let editingIdx = -1, editingId = null;
+let drawerIdx = -1;
+let importReplace = false;
+
+/* ---------------- helpers ---------------- */
+function esc(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function toast(msg, actionLabel, action){
+  const t=$('#toast'); t.classList.add('show'); t.textContent='';
+  const span=el('span'); span.textContent=msg; t.appendChild(span);
+  if(actionLabel&&action){
+    const b=el('button'); b.textContent=actionLabel;
+    b.addEventListener('click',()=>{ clearTimeout(t._h); t.classList.remove('show'); t.textContent=''; action(); });
+    t.appendChild(b);
+  }
+  clearTimeout(t._h); t._h=setTimeout(()=>{ t.classList.remove('show'); t.textContent=''; }, actionLabel?6000:2600);
+}
+function cap(s){ return String(s||'').replace(/\b\w/g, c=>c.toUpperCase()); }
+function deriveStatus(r){
+  const st=String(r.stage||'').trim().toLowerCase();
+  if(st){ if(STAGE_ALIAS[st]) return STAGE_ALIAS[st]; return cap(st); }
+  if(String(r.completed||'').trim()) return 'Completed';
+  if(String(r.installDate||'').trim()) return 'Scheduled';
+  return 'In Progress';
+}
+function parseMoney(s){
+  if(!s) return null;
+  const nums=String(s).replace(/,/g,'').match(/\d+(?:\.\d+)?/g);
+  if(!nums) return null;
+  const vals=nums.map(Number);
+  return Math.max(...vals);
+}
+function money(s){ return (s==null||isNaN(s))?'—':'$'+Math.round(s).toLocaleString('en-US'); }
+function primaryTotal(r){
+  for(const k of ['totalRoofCost','updatedQuote','hoCash','quoteTotal']){
+    const v=parseMoney(r[k]); if(v!=null) return v;
+  } return null;
+}
+function parseDate(v){
+  const m=String(v||'').match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+  if(!m) return null;
+  let y = m[3] ? (m[3].length===2 ? 2000+ +m[3] : +m[3]) : new Date().getFullYear();
+  return new Date(y, +m[1]-1, +m[2]);
+}
+function cityFrom(addr){
+  const parts=String(addr||'').split(',').map(s=>s.trim()).filter(Boolean);
+  return parts.length>=2 ? parts[1] : '';
+}
+function pmColor(pm){
+  const uniq=[...new Set(state.data.map(r=>r.projectManager).filter(Boolean))].sort();
+  const i=uniq.indexOf(pm);
+  return PM_COLORS[Math.max(0,i)%PM_COLORS.length];
+}
+function uniqueVals(key){
+  return [...new Set(state.data.map(r=>String(r[key]||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+}
+const isAdmin = ()=>!!(auth && auth.admin);
+
+/* =============================================================
+   Supabase client — auth + data (PostgREST)
+   ============================================================= */
+async function supa(path, opts={}, flags={}){
+  const headers={ 'apikey': SUPABASE_ANON_KEY, 'Content-Type':'application/json' };
+  if(flags.auth!==false && auth && auth.accessToken) headers['Authorization']='Bearer '+auth.accessToken;
+  if(opts.headers) Object.assign(headers, opts.headers);
+  const res=await fetch(SUPABASE_URL+path, Object.assign({}, opts, {headers}));
+  if(!res.ok){
+    let msg=res.statusText;
+    try{ const j=await res.json(); msg=j.error_description||j.msg||j.message||j.error||msg; }catch(e){}
+    const err=new Error(msg||('Request failed ('+res.status+')')); err.status=res.status; throw err;
+  }
+  if(res.status===204) return null;
+  const ct=res.headers.get('content-type')||'';
+  return ct.includes('json') ? res.json() : res.text();
+}
+async function setSession(tokenData, user){
+  auth={ user: user||tokenData.user, accessToken:tokenData.access_token, refreshToken:tokenData.refresh_token,
+    expiresAt:Date.now()+tokenData.expires_in*1000 };
+  sessionStorage.setItem('phq_session', JSON.stringify({
+    user:auth.user, accessToken:auth.accessToken, refreshToken:auth.refreshToken, expiresAt:auth.expiresAt }));
+  await loadProfile();
+}
+function signOutLocal(){ auth=null; sessionStorage.removeItem('phq_session'); }
+async function ensureAuth(){
+  if(!auth) throw new Error('Not signed in');
+  if(Date.now()>=auth.expiresAt-15000){
+    const d=await supa('/auth/v1/token?grant_type=refresh_token',
+      {method:'POST',body:JSON.stringify({refresh_token:auth.refreshToken})},{auth:false});
+    await setSession(d);
+  }
+}
+async function loadProfile(){
+  try{
+    const rows=await supa('/rest/v1/profiles?select=role&id=eq.'+auth.user.id,{},{auth:true});
+    auth.role=rows[0]?.role||'viewer'; auth.admin=auth.role==='admin';
+  }catch(e){ auth.role='viewer'; auth.admin=false; }
+}
+async function signIn(email,password){
+  const d=await supa('/auth/v1/token?grant_type=password',
+    {method:'POST',body:JSON.stringify({email,password})},{auth:false});
+  await setSession(d);
+}
+async function signUp(email,password){
+  const d=await supa('/auth/v1/signup',
+    {method:'POST',body:JSON.stringify({email,password})},{auth:false});
+  if(d.session) await setSession(d.session, d.user);
+  return !!d.session;   /* false → email confirmation required */
+}
+async function signOut(){
+  try{ await supa('/auth/v1/logout',{method:'POST',body:'{}'},{auth:true}); }catch(e){}
+  signOutLocal();
+}
+async function changePassword(cur,nw){
+  await supa('/auth/v1/token?grant_type=password',
+    {method:'POST',body:JSON.stringify({email:auth.user.email,password:cur})},{auth:false});
+  await supa('/auth/v1/user',{method:'PUT',body:JSON.stringify({password:nw})},{auth:true});
+}
+
+/* ----- data ----- */
+async function loadJobs(){
+  await ensureAuth();
+  const rows=await supa('/rest/v1/jobs?select=id,data,updated_at&order=created_at.asc',{},{auth:true});
+  state.data=rows.map(r=>Object.assign({id:r.id, updatedAt:r.updated_at}, r.data||{}));
+  state.loaded=true;
+}
+async function rawJobIds(){
+  const rows=await supa('/rest/v1/jobs?select=id',{},{auth:true});
+  return rows.map(r=>r.id);
+}
+async function saveJob(rec){
+  if(!isAdmin()) throw new Error('Admin only');
+  await ensureAuth();
+  const {id, updatedAt, ...fields}=rec;
+  if(id){ await supa('/rest/v1/jobs?id=eq.'+id,{method:'PATCH',body:JSON.stringify({data:fields, updated_at:new Date().toISOString()})}); }
+  else { await supa('/rest/v1/jobs',{method:'POST',body:JSON.stringify({data:fields})}); }
+  await loadJobs();
+}
+async function deleteJob(id){
+  if(!isAdmin()) throw new Error('Admin only');
+  await ensureAuth();
+  await supa('/rest/v1/jobs?id=eq.'+id,{method:'DELETE'});
+  await loadJobs();
+}
+async function duplicateJob(rec){
+  if(!isAdmin()) throw new Error('Admin only');
+  await ensureAuth();
+  const {id, updatedAt, ...fields}=rec;
+  await supa('/rest/v1/jobs',{method:'POST',body:JSON.stringify({data:fields})});
+  await loadJobs();
+}
+async function seedJobs(){
+  if(!isAdmin()) throw new Error('Admin only');
+  await ensureAuth();
+  for(const rec of SEED){ await supa('/rest/v1/jobs',{method:'POST',body:JSON.stringify({data:rec})}); }
+  await loadJobs();
+}
+async function importRecords(records, replace){
+  if(!isAdmin()) throw new Error('Admin only');
+  await ensureAuth();
+  let merged;
+  if(replace){
+    merged=records;
+  } else {
+    const map={}; state.data.forEach(r=>{ if(r.projectNumber) map['#'+r.projectNumber]=r; });
+    const added=[];
+    records.forEach(rec=>{ const k='#'+rec.projectNumber; if(k&&map[k]) map[k]=rec; else added.push(rec); });
+    merged=[...added, ...Object.values(map)];
+  }
+  const ids=await rawJobIds();
+  for(const id of ids) await supa('/rest/v1/jobs?id=eq.'+id,{method:'DELETE'});
+  for(const rec of merged){ const {id,updatedAt,...fields}=rec; await supa('/rest/v1/jobs',{method:'POST',body:JSON.stringify({data:fields})}); }
+  await loadJobs();
+  return merged.length;
+}
+async function resetData(){
+  if(!isAdmin()) throw new Error('Admin only');
+  await ensureAuth();
+  const ids=await rawJobIds();
+  for(const id of ids) await supa('/rest/v1/jobs?id=eq.'+id,{method:'DELETE'});
+  for(const rec of SEED){ await supa('/rest/v1/jobs',{method:'POST',body:JSON.stringify({data:rec})}); }
+  await loadJobs();
+}
+async function busy(fn){
+  const bar=$('#loadingBar'); bar.classList.add('on'); bar.classList.remove('done');
+  try{ return await fn(); }
+  finally{ bar.classList.add('done'); setTimeout(()=>bar.classList.remove('on','done'),500); }
+}
+
+/* =============================================================
+   Auth UI
+   ============================================================= */
+let authTab='signin';
+function applyAuthUI(){
+  document.body.classList.toggle('admin-mode', !!auth && auth.admin);
+  const authed=!!auth;
+  $('#loginScreen').classList.toggle('show', !authed);
+  if(authed){
+    $('#userEmail').textContent=auth.user.email;
+    const rb=$('#userRole'); rb.textContent=auth.admin?'admin':'viewer';
+    rb.className='role-badge '+(auth.admin?'admin':'viewer');
+  }
+  if(!authed && state.loaded===false) renderAll();  /* ensure a clean state behind login */
+}
+function showLoginMsg(m){ $('#authErr').textContent=m; }
+function setAuthTab(t){
+  authTab=t;
+  document.querySelectorAll('.login-tabs button').forEach(b=>b.classList.toggle('active', b.dataset.tab===t));
+  $('#authGo').textContent = t==='signin' ? 'Sign in' : 'Create account';
+  $('#authPassword').autocomplete = t==='signin' ? 'current-password' : 'new-password';
+  $('#authHint').textContent = t==='signin' ? '' : 'Accounts are free. The first account is promoted to admin in setup.';
+  $('#authErr').textContent='';
+}
+async function authSubmit(){
+  const email=$('#authEmail').value.trim().toLowerCase();
+  const pw=$('#authPassword').value;
+  $('#authGo').disabled=true; showLoginMsg('');
+  try{
+    if(authTab==='signin'){
+      await signIn(email,pw);
+      await loadJobs();
+      applyAuthUI(); renderAll();
+      if(auth.admin && state.data.length===0){ renderAll(); toast('Workspace empty — use “Load original jobs”'); }
+      else toast('Welcome, '+auth.user.email);
+    } else {
+      if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Enter a valid email');
+      if(pw.length<6) throw new Error('Password must be at least 6 characters');
+      const ok=await signUp(email,pw);
+      if(ok){ await loadJobs(); applyAuthUI(); renderAll(); toast('Account created'); }
+      else showLoginMsg('Account created — check your email to confirm before signing in.');
+    }
+  }catch(e){
+    showLoginMsg(e.message||'Sign-in failed');
+  }finally{ $('#authGo').disabled=false; }
+}
+
+/* =============================================================
+   Filtering
+   ============================================================= */
+function filtered(){
+  const q=($('#q').value||'').trim().toLowerCase();
+  return state.data.filter(r=>{
+    if(filters.pm     && r.projectManager !== filters.pm) return false;
+    if(filters.state  && r.state !== filters.state) return false;
+    if(filters.team   && r.roofTeam !== filters.team) return false;
+    if(filters.sow    && r.sow !== filters.sow) return false;
+    if(filters.financing && r.financing !== filters.financing) return false;
+    if(filters.ledger && r.onLedgers !== filters.ledger) return false;
+    if(filters.stage  && deriveStatus(r)!==filters.stage) return false;
+    if(q){
+      const hay=[r.customer,r.projectNumber,r.address,r.state,r.sow,r.shingleColor,r.notes,r.rtcEndNote,r.projectManager]
+        .join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+/* ---------------- KPI ---------------- */
+function renderKPIs(){
+  const rows=state.data;
+  const active=rows.filter(r=>r.onLedgers==='TRUE');
+  const completed=rows.filter(r=>String(r.completed||'').trim());
+  const scheduled=rows.filter(r=>String(r.installDate||'').trim() && !String(r.completed||'').trim());
+  const attention=rows.filter(r=>['On Hold','Permitting','Change Order','Retention','NRTS','Cancelled']
+    .includes(deriveStatus(r)) && !String(r.completed||'').trim());
+  const now=new Date();
+  const upcoming=rows.filter(r=>{ const d=parseDate(r.installDate); return d&&d>=now && !String(r.completed||'').trim(); });
+  const pipe=active.reduce((s,r)=>s+(primaryTotal(r)||0),0);
+  const totals=rows.map(primaryTotal).filter(v=>v!=null);
+  const avg=totals.length?totals.reduce((a,b)=>a+b,0)/totals.length:0;
+  const kpis=[
+    {label:'Active Jobs', num:active.length, sub:rows.length+' total in pipeline', tone:'', ico:'📋'},
+    {label:'Scheduled', num:scheduled.length, sub:upcoming.length+' upcoming install', tone:'', ico:'📅'},
+    {label:'Completed', num:completed.length, sub:'jobs finished', tone:'good', ico:'✅'},
+    {label:'Needs Attention', num:attention.length, sub:'hold · permit · change order', tone:'crit', ico:'⚠️'},
+    {label:'Pipeline Value', num:money(pipe), sub:'active jobs (quote/roof cost)', tone:'serious', ico:'💰'},
+    {label:'Avg Job Value', num:money(avg), sub:'across '+totals.length+' quoted jobs', tone:'', ico:'📈'},
+  ];
+  const wrap=$('#kpis'); wrap.innerHTML='';
+  kpis.forEach(k=>{
+    const d=el('div','kpi'+(k.tone?(' tone-'+k.tone):''));
+    d.innerHTML=`<div class="ico">${k.ico}</div><div class="num ${k.tone==='crit'?'crit':''}">${esc(k.num)}</div>
+      <div class="lbl">${esc(k.label)}</div><div class="sub">${esc(k.sub)}</div>`;
+    wrap.appendChild(d);
+  });
+}
+
+/* ---------------- filters bar ---------------- */
+function renderFilters(){
+  const wrap=$('#filters'); wrap.innerHTML='';
+  const mk=(label,key,options,placeholder)=>{
+    const l=el('label'); l.innerHTML=`${label}`;
+    const s=el('select'); s.dataset.key=key;
+    const o0=el('option'); o0.value=''; o0.textContent=placeholder; s.appendChild(o0);
+    options.forEach(v=>{ const o=el('option'); o.value=v; o.textContent=v; if(v===filters[key])o.selected=true; s.appendChild(o); });
+    s.addEventListener('change',()=>{ filters[key]=s.value; renderAll(); });
+    l.appendChild(s); return l;
+  };
+  wrap.appendChild(mk('PM','pm',uniqueVals('projectManager'),'All PMs'));
+  wrap.appendChild(mk('State','state',uniqueVals('state'),'All states'));
+  wrap.appendChild(mk('Team','team',uniqueVals('roofTeam'),'All teams'));
+  wrap.appendChild(mk('SOW','sow',uniqueVals('sow'),'All jobs'));
+  wrap.appendChild(mk('Financing','financing',uniqueVals('financing'),'All financing'));
+  wrap.appendChild(mk('Stage','stage',[...new Set(state.data.map(deriveStatus))].sort(),'All stages'));
+  const ledger=el('label'); ledger.innerHTML=`Ledger`;
+  const ls=el('select'); ls.dataset.key='ledger';
+  [['','All'],['TRUE','On ledger'],['FALSE','Off ledger']].forEach(([v,t])=>{const o=el('option');o.value=v;o.textContent=t;if(v===filters.ledger)o.selected=true;ls.appendChild(o);});
+  ls.addEventListener('change',()=>{filters.ledger=ls.value;renderAll();}); ledger.appendChild(ls); wrap.appendChild(ledger);
+  const reset=el('button','chip-btn','✕ Clear filters');
+  reset.addEventListener('click',()=>{ filters={pm:'',state:'',team:'',sow:'',stage:'',financing:'',ledger:''}; $('#q').value=''; renderAll(); });
+  wrap.appendChild(reset);
+  const pill=el('span','count-pill'); pill.textContent=filtered().length+' of '+state.data.length; wrap.appendChild(pill);
+}
+
+/* ---------------- board ---------------- */
+function renderBoard(){
+  const rows=filtered();
+  const groups={};
+  rows.forEach(r=>{ const st=deriveStatus(r); (groups[st]=groups[st]||[]).push(r); });
+  const order=[...STAGE_ORDER,...Object.keys(groups).filter(k=>!STAGE_ORDER.includes(k)).sort()];
+  const board=$('#board'); board.innerHTML=''; board.className='board';
+  if(!state.data.length && state.loaded){
+    const empty=el('div','empty-workspace');
+    empty.innerHTML=`<h3>This workspace is empty</h3><p>Load the original 151 jobs to get started, or add your first job.</p>`;
+    if(isAdmin()){
+      const b=el('button','btn primary seed-btn','⬇ Load original 151 jobs');
+      b.addEventListener('click',async ()=>{ try{ await busy(()=>seedJobs()); renderAll(); toast('Loaded original jobs'); }catch(e){ toast('Failed: '+e.message); } });
+      empty.appendChild(b);
+    }
+    board.appendChild(empty); updateBoardFade(); return;
+  }
+  order.forEach(st=>{
+    if(!groups[st]) return;
+    const col=el('div','board-col');
+    const colr=STAGE_COLOR[st]||{c:'#2a78d6',bg:'rgba(42,120,214,.14)'};
+    col.style.setProperty('--sc',colr.c);
+    const h=el('h3',null,`<span class="dot"></span>${esc(st)}<span class="cnt">${groups[st].length}</span>`);
+    col.appendChild(h);
+    const cards=el('div','col-cards');
+    const sorted=groups[st].sort((a,b)=>(parseDate(a.installDate)||0)-(parseDate(b.installDate)||0) || String(a.customer).localeCompare(String(b.customer)));
+    sorted.forEach(r=>{ cards.appendChild(card(r)); });
+    col.appendChild(cards);
+    board.appendChild(col);
+  });
+  if(!order.some(st=>groups[st])){ board.innerHTML='<div class="empty-col" style="flex:1">No jobs match the current filters.</div>'; }
+  updateBoardFade();
+}
+function updateBoardFade(){
+  const board=$('#board'), wrap=board.parentElement;
+  if(!board||!wrap) return;
+  const atEnd=board.scrollLeft+board.clientWidth>=board.scrollWidth-4;
+  wrap.classList.toggle('at-end',atEnd);
+}
+function card(r){
+  const idx=state.data.indexOf(r);
+  const st=deriveStatus(r);
+  const colr=STAGE_COLOR[st]||{c:'#2a78d6',bg:'rgba(42,120,214,.14)'};
+  const c=el('div','card');
+  const city=cityFrom(r.address);
+  const inst=r.installDate?`Install ${esc(r.installDate)}`:'';
+  const m=primaryTotal(r);
+  c.innerHTML=`
+    <div class="row1"><span class="proj">#${esc(r.projectNumber||'—')}</span>
+      <span class="badge" style="color:${colr.c};background:${colr.bg}"><span class="dot"></span>${esc(st)}</span></div>
+    <div class="cust">${esc(r.customer||'—')}</div>
+    <div class="meta">${esc([city,r.state].filter(Boolean).join(', ')||r.state||'')}${r.sow?' · <b>'+esc(r.sow)+'</b>':''}</div>
+    <div class="meta">${money(m)}${r.shingleColor?' · '+esc(r.shingleColor):''}</div>
+    <div class="foot">
+      <span class="chip" style="background:${pmColor(r.projectManager)}">${esc((r.projectManager||'?')[0].toUpperCase())}</span>
+      <span class="meta" style="font-size:11px">${esc(r.projectManager||'unassigned')}</span>
+      <span class="date">${inst}</span>
+    </div>`;
+  c.addEventListener('click',()=>openDrawer(idx));
+  return c;
+}
+
+/* ---------------- table ---------------- */
+function renderTable(){
+  const wrap=$('#table');
+  const rows=filtered().sort((a,b)=>{
+    let x=sortVal(a,sortKey), y=sortVal(b,sortKey);
+    if(typeof x==='number'&&typeof y==='number') return (x-y)*sortDir;
+    return String(x??'').localeCompare(String(y??''))*sortDir;
+  });
+  const cols=[['onLedgers','Ledger'],['projectManager','PM'],['projectNumber','Proj#'],['customer','Customer'],
+    ['state','ST'],['entered','Entered'],['sow','SOW'],['roofTeam','Team'],['quoteTotal','Quote'],
+    ['shingleColor','Color'],['financing','Financing'],['installDate','Install'],['completed','Done'],
+    ['totalRoofCost','Roof Cost'],['lastUpdate','Updated'],['stage','Stage']];
+  const tbl=el('div','table-wrap');
+  const t=el('table');
+  const th=el('thead'); const trh=el('tr');
+  const stc=el('th','', 'Status'); trh.appendChild(stc);
+  cols.forEach(([k,lbl])=>{
+    const c=el('th',sortKey===k?'sorted':'');
+    c.innerHTML=`${lbl}${sortKey===k?` <span class="arr">${sortDir>0?'▲':'▼'}</span>`:''}`;
+    c.addEventListener('click',()=>{ if(sortKey===k)sortDir*=-1; else {sortKey=k;sortDir=1;} renderAll(); });
+    trh.appendChild(c);
+  });
+  th.appendChild(trh); t.appendChild(th);
+  const tb=el('tbody');
+  rows.forEach(r=>{
+    const idx=state.data.indexOf(r);
+    const tr=el('tr'); if(r.onLedgers!=='TRUE') tr.classList.add('status-off');
+    const st=deriveStatus(r); const colr=STAGE_COLOR[st]||{c:'#2a78d6',bg:'rgba(42,120,214,.14)'};
+    const td0=el('td',null,`<span class="badge" style="color:${colr.c};background:${colr.bg}"><span class="dot"></span>${esc(st)}</span>`);
+    tr.appendChild(td0);
+    cols.forEach(([k])=>{
+      const td=el('td');
+      const v=r[k]||'';
+      if(k==='projectNumber') td.textContent='#'+(v||'—');
+      else if(k==='quoteTotal'||k==='totalRoofCost'){ td.className='money'; td.textContent=v||'—'; }
+      else td.textContent=v;
+      tr.appendChild(td);
+    });
+    tr.addEventListener('click',()=>openDrawer(idx));
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb); tbl.appendChild(t);
+  wrap.innerHTML=''; wrap.appendChild(tbl);
+  const hint=el('div','sort-hint',`${rows.length} jobs · click a column header to sort · click a row to open details`);
+  wrap.appendChild(hint);
+}
+function sortVal(r,k){
+  if(k==='quoteTotal'||k==='totalRoofCost') return parseMoney(r[k])||0;
+  if(k==='projectNumber') return parseFloat(String(r.projectNumber).replace(/\D/g,''))||0;
+  return r[k]||'';
+}
+
+/* ---------------- summary ---------------- */
+function renderSummary(){
+  const wrap=$('#summary'); wrap.innerHTML='';
+  wrap.className='summary';
+  const rows=filtered();
+  const bar=(label,val,max,color,extra)=>{
+    const row=el('div','bar-row');
+    const pct=max?Math.max(2,(val/max)*100):0;
+    row.innerHTML=`<div class="lab">${esc(label)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+      <div class="val">${val}${extra?` <small>${extra}</small>`:''}</div>`;
+    return row;
+  };
+  const panel=(title,sub,bodyEl)=>{
+    const p=el('div','panel');
+    p.appendChild(el('h3',null,esc(title)));
+    if(sub)p.appendChild(el('p','sub',esc(sub)));
+    p.appendChild(bodyEl);
+    return p;
+  };
+  const countBy=(fn)=>rows.reduce((m,r)=>{const k=fn(r);if(k) m[k]=(m[k]||0)+1; return m;},{});
+  const sumBy=(fn,valFn)=>rows.reduce((m,r)=>{const k=fn(r);if(k){const v=valFn(r)||0; m[k]=(m[k]||0)+v;} return m;},{});
+
+  const byPM=countBy(r=>r.projectManager);
+  const byPM$=sumBy(r=>r.projectManager, primaryTotal);
+  const pms=Object.keys(byPM).sort((a,b)=>byPM[b]-byPM[a]);
+  const maxPM=Math.max(1,...pms.map(k=>byPM[k]));
+  const b1=el('div','bars');
+  pms.forEach((k,i)=>{ b1.appendChild(bar(k,byPM[k],maxPM,PM_COLORS[i%PM_COLORS.length],money(byPM$[k]))); });
+  wrap.appendChild(panel('Jobs by Project Manager','count · est. value per PM',b1));
+
+  const byStage=countBy(deriveStatus);
+  const stages=Object.keys(byStage).sort((a,b)=>byStage[b]-byStage[a]);
+  const maxS=Math.max(1,...stages.map(k=>byStage[k]));
+  const b2=el('div','bars');
+  stages.forEach(k=>{ const colr=STAGE_COLOR[k]||{c:'#2a78d6'}; b2.appendChild(bar(k,byStage[k],maxS,colr.c)); });
+  wrap.appendChild(panel('Jobs by Stage','current pipeline status',b2));
+
+  const byState=countBy(r=>r.state);
+  const states=Object.keys(byState).sort((a,b)=>byState[b]-byState[a]);
+  const maxST=Math.max(1,...states.map(k=>byState[k]));
+  const b3=el('div','bars');
+  states.forEach(k=>{ b3.appendChild(bar(k||'—',byState[k],maxST,'#2a78d6')); });
+  wrap.appendChild(panel('Jobs by State','all states in pipeline',b3));
+
+  const byTeam=countBy(r=>r.roofTeam);
+  let teams=Object.keys(byTeam).sort((a,b)=>byTeam[b]-byTeam[a]);
+  let teamExtra=0;
+  if(teams.length>8){ const top=teams.slice(0,7); teamExtra=teams.slice(7).reduce((s,k)=>s+byTeam[k],0); teams=top; }
+  const maxT=Math.max(1,...teams.map(k=>byTeam[k]),teamExtra);
+  const b4=el('div','bars');
+  teams.forEach(k=>{ b4.appendChild(bar(k,byTeam[k],maxT,'#4a3aa7')); });
+  if(teamExtra) b4.appendChild(bar('Other',teamExtra,maxT,'#898781'));
+  wrap.appendChild(panel('Jobs by Roof Team','top teams'+(teamExtra?' (+ '+teamExtra+' other)':''),b4));
+
+  const now=new Date();
+  const up=rows.filter(r=>{const d=parseDate(r.installDate);return d&&d>=now&&!String(r.completed||'').trim();})
+    .sort((a,b)=>parseDate(a.installDate)-parseDate(b.installDate)).slice(0,12);
+  const l5=el('div','list');
+  if(!up.length) l5.appendChild(el('div','empty-col','No upcoming installs.'));
+  up.forEach(r=>{
+    const d=parseDate(r.installDate); const st=deriveStatus(r);
+    const colr=STAGE_COLOR[st]||{c:'#2a78d6'};
+    const li=el('div','li');
+    li.innerHTML=`<span class="badge" style="color:${colr.c};background:${colr.bg}"><span class="dot"></span>${esc(st)}</span>
+      <span>${esc(r.customer||'—')} <small style="color:var(--ink-3)">· ${esc(cityFrom(r.address)||r.state)}</small></span>
+      <span class="when">${d.toLocaleDateString(undefined,{month:'short',day:'numeric'})}</span>`;
+    li.addEventListener('click',()=>openDrawer(state.data.indexOf(r)));
+    l5.appendChild(li);
+  });
+  wrap.appendChild(panel('Upcoming Installations','next installs from today',l5));
+
+  const byState$=sumBy(r=>r.state, primaryTotal);
+  const ss=Object.keys(byState$).sort((a,b)=>byState$[b]-byState$[a]);
+  const max$=Math.max(1,...ss.map(k=>byState$[k]));
+  const b6=el('div','bars');
+  ss.forEach(k=>{ b6.appendChild(bar(k||'—',money(byState$[k]),max$,'#1baf7a')); });
+  wrap.appendChild(panel('Estimated Value by State','sum of quote / roof cost',b6));
+}
+
+/* ---------------- drawer ---------------- */
+function openDrawer(idx){
+  drawerIdx=idx;
+  const r=state.data[idx]; if(!r)return;
+  const st=deriveStatus(r); const colr=STAGE_COLOR[st]||{c:'#2a78d6',bg:'rgba(42,120,214,.14)'};
+  const dr=$('#drawer');
+  const body=el('div','drawer-body');
+  const dl=el('dl','dl');
+  const add=(k,label)=>{
+    const v=r[k];
+    if(v==null||String(v).trim()==='') return;
+    const dt=el('dt',null,esc(label));
+    const dd=el('dd');
+    if(k==='notes'||k==='rtcEndNote'){ dd.className='notes-blob'; dd.textContent=v; }
+    else if(k==='sq'||k==='extraAdders'){ dd.appendChild(el('div','blob',esc(v))); }
+    else if(k==='quoteTotal'||k==='totalRoofCost'||k==='hoCash'||k==='updatedQuote'){ dd.className='money'; dd.textContent=v; }
+    else dd.textContent=v;
+    dl.appendChild(dt); dl.appendChild(dd);
+  };
+  dl.appendChild(el('dt',null,'Status'));
+  const ddSt=el('dd'); ddSt.appendChild(el('span','badge',`<span class="dot"></span>${esc(st)}`));
+  ddSt.firstChild.style.color=colr.c; ddSt.firstChild.style.background=colr.bg;
+  dl.appendChild(ddSt);
+  FIELDS.forEach(f=>{ if(f.key!=='stage') add(f.key,f.label); });
+  body.appendChild(dl);
+  const btnRow=el('div',null);
+  btnRow.style.cssText='display:flex;gap:8px;margin-top:18px;flex-wrap:wrap';
+  if(isAdmin()){
+    const edit=el('button','btn primary','✏️ Edit Job');
+    edit.addEventListener('click',()=>{ closeDrawer(); openModal(idx); });
+    const dup=el('button','btn','⧉ Duplicate');
+    dup.addEventListener('click',async ()=>{
+      try{
+        const copy=JSON.parse(JSON.stringify(r)); delete copy.id; delete copy.updatedAt;
+        copy.projectNumber=''; copy.customer=copy.customer+' (copy)';
+        copy.stage=''; copy.installDate=''; copy.completed=''; copy.onLedgers='TRUE';
+        await busy(()=>duplicateJob(copy));
+        closeDrawer(); renderAll(); toast('Job duplicated');
+      }catch(e){ toast('Duplicate failed: '+e.message); }
+    });
+    const del=el('button','btn danger','🗑 Delete');
+    del.addEventListener('click',async ()=>{
+      if(!confirm('Delete this job permanently? This cannot be undone.')) return;
+      try{
+        await busy(()=>deleteJob(r.id));
+        renderAll(); toast('Deleted '+r.customer);
+      }catch(e){ toast('Delete failed: '+e.message); }
+    });
+    btnRow.appendChild(edit); btnRow.appendChild(dup); btnRow.appendChild(del);
+  } else {
+    btnRow.appendChild(el('div','lock-hint','👁 View only — only an admin can edit or delete jobs.'));
+  }
+  body.appendChild(btnRow);
+  dr.innerHTML='';
+  const head=el('div','drawer-head');
+  head.innerHTML=`<div><h2>${esc(r.customer||'Untitled')}</h2>
+    <div class="sub">#${esc(r.projectNumber||'—')} · ${esc(r.address||'')}</div></div>`;
+  const closeBtn=el('button','btn sm ghost x','✕');
+  closeBtn.style.marginLeft='auto'; closeBtn.addEventListener('click',closeDrawer);
+  head.appendChild(closeBtn);
+  dr.appendChild(head); dr.appendChild(body);
+  $('#scrim').classList.add('show'); dr.classList.add('show');
+}
+function closeDrawer(){ $('#scrim').classList.remove('show'); $('#drawer').classList.remove('show'); }
+
+/* ---------------- modal (add / edit) ---------------- */
+function openModal(idx){
+  if(!isAdmin()){ toast('Only admins can edit'); return; }
+  editingIdx=idx; editingId = idx>=0 ? state.data[idx].id : null;
+  const r=idx>=0?state.data[idx]:{onLedgers:'TRUE'};
+  $('#modalTitle').textContent = idx>=0?('Edit · '+(r.customer||'#'+r.projectNumber||'Job')):'New Job';
+  $('#modalDelete').style.display = idx>=0?'':'none';
+  const body=$('#modalBody'); body.innerHTML='';
+  const datalists={};
+  FIELDS.forEach(f=>{
+    const w=el('div','fld'+(f.full?' full':''));
+    if(f.type==='toggle'){
+      const t=el('label','tgl');
+      t.innerHTML=`<input type="checkbox" ${r.onLedgers==='TRUE'?'checked':''}><span class="track"></span>
+        <span class="lbl">${r.onLedgers==='TRUE'?'On ledger':'Off ledger'}</span>`;
+      const cb=t.querySelector('input');
+      cb.addEventListener('change',()=>{ t.querySelector('.lbl').textContent=cb.checked?'On ledger':'Off ledger'; });
+      w.appendChild(el('label',null,esc(f.label))); w.appendChild(t);
+    } else {
+      const lab=el('label',null,esc(f.label));
+      let input;
+      if(f.type==='textarea'){
+        input=el('textarea'); input.rows=f.key==='notes'?6:3;
+      } else {
+        input=el('input'); input.setAttribute('list','dl_'+f.key); input.autocomplete='off';
+        if(!datalists[f.key]){
+          const dl2=el('datalist'); dl2.id='dl_'+f.key;
+          uniqueVals(f.key).forEach(v=>{ const o=el('option'); o.value=v; dl2.appendChild(o); });
+          body.appendChild(dl2); datalists[f.key]=true;
+        }
+        if(f.type==='stagecombo'){
+          const dl2=el('datalist'); dl2.id='dl_stage';
+          STAGE_VOCAB.forEach(v=>{ const o=el('option'); o.value=v; dl2.appendChild(o); });
+          body.appendChild(dl2); datalists.stage=true;
+        }
+      }
+      input.value = r[f.key]||'';
+      input.dataset.key=f.key;
+      w.appendChild(lab); w.appendChild(input);
+      if(f.hint) w.appendChild(el('div','hint',esc(f.hint)));
+    }
+    body.appendChild(w);
+  });
+  $('#modalWrap').classList.add('show');
+}
+function readModal(){
+  const obj={};
+  $('#modalBody').querySelectorAll('[data-key]').forEach(inp=>{ obj[inp.dataset.key]=inp.value.trim(); });
+  const tgl=$('#modalBody .tgl input');
+  if(tgl) obj.onLedgers=tgl.checked?'TRUE':'FALSE';
+  else obj.onLedgers='';
+  return obj;
+}
+function closeModal(){ $('#modalWrap').classList.remove('show'); editingIdx=-1; editingId=null; }
+$('#modalClose').addEventListener('click',closeModal);
+$('#modalCancel').addEventListener('click',closeModal);
+$('#modalSave').addEventListener('click',async ()=>{
+  const obj=readModal(); if(editingId) obj.id=editingId;
+  const isNew=!editingId;
+  $('#modalSave').disabled=true;
+  try{
+    await busy(()=>saveJob(obj));
+    closeModal(); renderAll(); toast(isNew?'Added new job':'Saved '+obj.customer);
+  }catch(e){ toast('Save failed: '+e.message); }
+  finally{ $('#modalSave').disabled=false; }
+});
+$('#modalDelete').addEventListener('click',async ()=>{
+  if(!editingId) return;
+  if(!confirm('Delete this job permanently? This cannot be undone.')) return;
+  try{ await busy(()=>deleteJob(editingId)); closeModal(); renderAll(); toast('Deleted'); }
+  catch(e){ toast('Delete failed: '+e.message); }
+});
+
+/* ---------------- CSV export / import ---------------- */
+function csvEscape(v){ v=String(v??''); if(/[",\n\r]/.test(v)) return '"'+v.replace(/"/g,'""')+'"'; return v; }
+function exportCSV(){
+  const lines=[HEADERS.map(csvEscape).join(',')];
+  state.data.forEach(r=>{ lines.push(HEADERS.map(h=>csvEscape(r[HEADER_KEY[h]]??'')).join(',')); });
+  const blob=new Blob(["﻿"+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=el('a'); a.href=URL.createObjectURL(blob);
+  const d=new Date().toISOString().slice(0,10);
+  a.download=`pipeline-export-${d}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('CSV downloaded — ready to upload to Google Sheets');
+}
+function parseCSV(text){
+  const rows=[]; let row=[], cur='', inQ=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'){ if(text[i+1]==='"'){ cur+='"'; i++; } else inQ=false; }
+      else cur+=c;
+    } else if(c==='"') inQ=true;
+    else if(c===','){ row.push(cur); cur=''; }
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n')i++; row.push(cur); rows.push(row); row=[]; cur=''; }
+    else cur+=c;
+  }
+  if(cur!==''||row.length){ row.push(cur); rows.push(row); }
+  return rows.filter(r=>r.some(c=>String(c).trim()!==''));
+}
+function importCSV(text){
+  const rows=parseCSV(text);
+  if(rows.length<2) return toast('Nothing to import — CSV looks empty');
+  const head=rows[0].map(h=>String(h).trim().replace(/^﻿/,''));
+  const records=[];
+  for(let i=1;i<rows.length;i++){
+    const row=rows[i];
+    const rec={};
+    FIELDS.forEach(f=>{ rec[f.key]=''; });
+    head.forEach((h,j)=>{ const k=HEADER_KEY[h]; if(k) rec[k]=String(row[j]??'').trim(); });
+    if(!String(rec.customer||rec.projectNumber).trim()) continue;
+    records.push(rec);
+  }
+  if(!records.length) return toast('No job rows found in that file');
+  return records;
+}
+
+/* ---------------- button handlers ---------------- */
+$('#btnLogout').addEventListener('click',async ()=>{ await signOut(); applyAuthUI(); toast('Signed out'); });
+$('#btnExport').addEventListener('click',()=>{ if(!isAdmin()){ toast('Admin only'); return; } exportCSV(); });
+$('#btnImport').addEventListener('click',async ()=>{
+  if(!isAdmin()){ toast('Admin only'); return; }
+  const doImport=()=>{ const f=$('#fileInput').files[0]; if(!f)return;
+    const rd=new FileReader();
+    rd.onload=async e=>{
+      const records=importCSV(e.target.result);
+      if(!records) return;
+      try{
+        const n=await busy(()=>importRecords(records, importReplace));
+        renderAll(); toast('Import done · '+n+' jobs in workspace');
+      }catch(err){ toast('Import failed: '+err.message); }
+    };
+    rd.readAsText(f); };
+  importReplace = confirm('Import CSV — merge by Project #?\n\nOK = merge (matches existing Project #s)\nCancel = replace ALL jobs with the file');
+  $('#fileInput').onchange=doImport;
+  $('#fileInput').click();
+});
+$('#btnNew').addEventListener('click',()=>{ if(!isAdmin()){ toast('Only admins can add jobs'); return; } openModal(-1); });
+$('#btnReset').addEventListener('click',async ()=>{
+  if(!isAdmin()){ toast('Admin only'); return; }
+  if(!confirm('Restore the ORIGINAL 151 jobs? Every job you added or changed will be deleted.')) return;
+  try{ await busy(()=>resetData()); renderAll(); toast('Data reset to original'); }
+  catch(e){ toast('Reset failed: '+e.message); }
+});
+$('#btnSetupDone').addEventListener('click',()=>location.reload());
+
+/* password change */
+$('#btnPassword').addEventListener('click',()=>{ if(isAdmin()){ $('#pwCur').value='';$('#pwNew').value='';$('#pwConfirm').value='';$('#pwErr').textContent=''; $('#pwWrap').classList.add('show'); setTimeout(()=>$('#pwCur').focus(),50); } });
+$('#pwClose').addEventListener('click',()=>$('#pwWrap').classList.remove('show'));
+$('#pwCancel').addEventListener('click',()=>$('#pwWrap').classList.remove('show'));
+$('#pwSave').addEventListener('click',async ()=>{
+  const cur=$('#pwCur').value, nw=$('#pwNew').value, cf=$('#pwConfirm').value, err=$('#pwErr');
+  if(nw.length<6){ err.textContent='New password must be at least 6 characters'; return; }
+  if(nw!==cf){ err.textContent='New passwords do not match'; return; }
+  try{
+    await changePassword(cur,nw);
+    $('#pwWrap').classList.remove('show'); toast('Password updated');
+  }catch(e){ err.textContent='Current password is incorrect'; }
+});
+
+/* auth screen */
+$('#authGo').addEventListener('click',authSubmit);
+$('#authEmail').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#authPassword').focus(); });
+$('#authPassword').addEventListener('keydown',e=>{ if(e.key==='Enter') authSubmit(); });
+document.querySelectorAll('.login-tabs button').forEach(b=>b.addEventListener('click',()=>setAuthTab(b.dataset.tab)));
+
+/* ---------------- routing ---------------- */
+const views=['board','table','summary'];
+function renderAll(){
+  renderKPIs(); renderFilters();
+  const cur=document.querySelector('.tab.active').dataset.view;
+  $('#board').style.display = cur==='board'?'':'none';
+  $('#table').style.display = cur==='table'?'':'none';
+  $('#summary').style.display = cur==='summary'?'':'none';
+  if(cur==='board') renderBoard();
+  else if(cur==='table') renderTable();
+  else renderSummary();
+}
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active'); renderAll();
+  });
+});
+$('#q').addEventListener('input',renderAll);
+$('#board').addEventListener('scroll',updateBoardFade);
+window.addEventListener('resize',updateBoardFade);
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){ closeDrawer(); closeModal(); $('#pwWrap').classList.remove('show'); }
+});
+$('#scrim').addEventListener('click',closeDrawer);
+
+/* ---------------- boot ---------------- */
+async function restoreSession(){
+  const raw=sessionStorage.getItem('phq_session'); if(!raw) return;
+  try{
+    const s=JSON.parse(raw);
+    auth={ user:s.user, accessToken:s.accessToken, refreshToken:s.refreshToken, expiresAt:s.expiresAt };
+    if(Date.now()>=s.expiresAt-30000){
+      const d=await supa('/auth/v1/token?grant_type=refresh_token',
+        {method:'POST',body:JSON.stringify({refresh_token:s.refreshToken})},{auth:false});
+      await setSession(d);
+    }
+  }catch(e){ signOutLocal(); }
+}
+(async function init(){
+  setAuthTab('signin');
+  if(!IS_CONFIGURED){ $('#setupScreen').classList.add('show'); return; }
+  try{
+    await restoreSession();
+    if(auth){
+      await loadJobs();
+      applyAuthUI(); renderAll();
+      if(!auth.admin) toast('Viewing as '+auth.user.email);
+    } else {
+      applyAuthUI();   /* shows login screen */
+    }
+  }catch(e){
+    signOutLocal(); applyAuthUI(); toast('Sign-in expired — please sign in again');
+  }
+})();
+</script>
+</body>
+</html>
